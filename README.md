@@ -5,7 +5,7 @@
 File systems are implemented as a pair **(d, t) ::(Directory, Trail)**, where
 + **d :: Directory** is the current directory of the file system, and
 
-+ **t :: Trail = [PathChoice DirID DirContent]** is a list of values of the form **[PathChoice d_1 dCont_1, ..., PathChoice d_n dCont_n]** (with 0 <= n), where **d_1** is the ID of the parent directory of **d** and **dCont_1** is a list of of all the files and directories in **d1** except for **d**. The other **PathChoice**s in **t**, namely **[PathChoice d_2 dCont_2, ..., PathChoice d_n dCont_n]**, contain the required information to reconstruct the entire file system all the way up to its root.
++ **t :: Trail = [PathChoice DirID DirContent]** is a list of values of the form **[PathChoice d_1 dCont_1, ..., PathChoice d_n dCont_n]** (with n >= 0), where **d_1** is the ID of the parent directory of **d** and **dCont_1** is a list of of all the files and directories in **d1** except for **d**. The other **PathChoice**s in **t**, namely **[PathChoice d_2 dCont_2, ..., PathChoice d_n dCont_n]**, contain the required information to reconstruct the entire file system all the way up to its root.
  
 *Note: Modelling file systems with a data structure like **PathChoice**, which falls under the category of [zippers](http://learnyouahaskell.com/zippers), allows for (arguably) simpler implementations of commands like **cd** and **cdup**, since (re)constructing directories can be trivially achieved via the data structure.*
 
@@ -21,6 +21,8 @@ The VSFS manager accepts the following commands:
 + **cd :: FS -> DirID -> Maybe FS** takes a file system **f1** and a directory ID **d_id** as arguments. If no directory with ID **d_id** exists in the current directory of **f1**, then **cd f1 d_id** returns **Nothing** (error). Otherwise, **cd f1 d_id** returns **Just f2** (successful computation), where **f2** is the result of switching the current directory of **f1** to the subdirectory whose ID is **d_id**.
 
 + **cdup :: FS -> Maybe FS** takes a file system **f1** as argument. If the current directory of **f1** is the root of the file system, then **cdup f1** returns **Nothing**. Otherwise, it returns **Just f2**, where **f2** is exactly like **f1** except that the current directory has been changed to the one right above.
+
++ **find :: FS -> String -> Maybe [Path]** takes a file system **f1** and a string **s**, and returns **Just [p_1, ..., p_n]** (with n >= 0), where each **p_i** is a path from the current directory of **f1** down to a file with ID **s**.
 
 \
 Being its first implementation, VSFS should be run from within [GHCi](https://docs.haskellstack.org/en/stable/ghci/). Here is an example of a session of VSFS in GHCi:
