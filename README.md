@@ -12,17 +12,17 @@ File systems are implemented as a pair **(d, t) ::(Directory, Trail)**, where
 \
 The VSFS manager accepts the following commands:
 
-+ **pwd :: FS -> Path** takes a file system **f1** as argument. It returns a string representing the path from the root of **f1** to its current directory.
++ **pwd :: FS -> Path** takes a file system **fs1** as argument. It returns a string representing the path from the root of **fss1** to its current directory.
 
-+ **addFile :: FS -> String -> Maybe FS** takes a file system **f1** and a string **s** as arguments. If **s** is already in the current directory of **f1**, then **addFile f1 s** returns **Nothing** (error). Otherwise, **addFile f1 s** returns **Just f2** (successful computation), where **f2** is the result of adding a new file with ID **s** to the current directory of **f1**.
++ **addFile :: FS -> File -> Maybe FS** takes a file system **fs1** and a file **f** as arguments. If **f** is already in the current directory of **fs1**, then **addFile fs1 f** returns **Nothing** (error). Otherwise, **addFile fs1 f** returns **Just fs2** (successful computation), where **fs2** is the result of adding a new file with ID **f** to the current directory of **fs1**.
 
-+ **addDir :: FS -> Directory -> Maybe FS** takes a file system **f1** and a directory **d** as arguments. If a directory with the same name as **d** is already in the current directory of **f1**, then **addDir f1 d** returns **Nothing** (error). Otherwise, **addDir f1 d** returns **Just f2** (successful computation), where **f2** is the result of adding directory **d** to the current directory of **f1**.
++ **addDir :: FS -> Directory -> Maybe FS** takes a file system **fs1** and a directory **d** as arguments. If a directory with the same name as **d** is already in the current directory of **fs1**, then **addDir fs1 d** returns **Nothing** (error). Otherwise, **addDir fs1 d** returns **Just f2** (successful computation), where **f2** is the result of adding directory **d** to the current directory of **fs1**.
 
-+ **cd :: FS -> DirID -> Maybe FS** takes a file system **f1** and a directory ID **d_id** as arguments. If no directory with ID **d_id** exists in the current directory of **f1**, then **cd f1 d_id** returns **Nothing** (error). Otherwise, **cd f1 d_id** returns **Just f2** (successful computation), where **f2** is the result of switching the current directory of **f1** to the subdirectory whose ID is **d_id**.
++ **cd :: FS -> DirID -> Maybe FS** takes a file system **fs1** and a directory ID **d_id** as arguments. If no directory with ID **d_id** exists in the current directory of **fs1**, then **cd fs1 d_id** returns **Nothing** (error). Otherwise, **cd fs1 d_id** returns **Just f2** (successful computation), where **f2** is the result of switching the current directory of **fs1** to the subdirectory whose ID is **d_id**.
 
-+ **cdup :: FS -> Maybe FS** takes a file system **f1** as argument. If the current directory of **f1** is the root of the file system, then **cdup f1** returns **Nothing**. Otherwise, it returns **Just f2**, where **f2** is exactly like **f1** except that the current directory has been changed to the one right above.
++ **cdup :: FS -> Maybe FS** takes a file system **fs1** as argument. If the current directory of **fs1** is the root of the file system, then **cdup fs1** returns **Nothing**. Otherwise, it returns **Just f2**, where **f2** is exactly like **fs1** except that the current directory has been changed to the one right above.
 
-+ **find :: FS -> String -> Maybe [Path]** takes a file system **f1** and a string **s**, and returns **Just [p_1, ..., p_n]** (with n >= 0), where each **p_i** is an entire path from the root of the file system down to a file whose ID is **s**.
++ **find :: FS -> String -> Maybe [Path]** takes a file system **fs1** and a string **s**, and returns **Just [p_1, ..., p_n]** (with n >= 0), where each **p_i** is an entire path from the root of the file system down to a file whose ID is **s**.
 
 \
 Being its first implementation, VSFS should be run from within [GHCi](https://docs.haskellstack.org/en/stable/ghci/). Here is an example of a session of VSFS in GHCi:
@@ -41,4 +41,4 @@ Being its first implementation, VSFS should be run from within [GHCi](https://do
 
 
 \
-In the near future, I plan on normalizing the commands' type signatures, handling errors via monads (leveraging the use of the Maybe monad) and extending the functionality provided by the accepted commands (with other useful commands like **rm**, or by generalizing **cd :: FS -> DirId -> Maybe FS** to **cd :: FS -> Path -> Maybe FS**), etc.
+In the near future, I plan on handling errors via monads (leveraging the use of the Maybe monad) and extending the functionality provided by the accepted commands (with other useful commands like **rm**, or by generalizing **cd :: FS -> DirId -> Maybe FS** to **cd :: FS -> Path -> Maybe FS**), etc.

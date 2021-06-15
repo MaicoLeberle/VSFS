@@ -95,11 +95,11 @@ getNameFile (File file) = file
 
 
 ---
-addFile :: FS -> String -> Maybe FS
-addFile fs@(Directory dirId dirCont, trail) fileName = 
+addFile :: FS -> File -> Maybe FS
+addFile fs@(Directory dirId dirCont, trail) file@(File fileName) = 
     if shallowFindFiles fs fileName
     then Nothing
-    else Just (Directory dirId (Left (File fileName) : dirCont), trail)
+    else Just (Directory dirId (Left file : dirCont), trail)
 ---
 
 
