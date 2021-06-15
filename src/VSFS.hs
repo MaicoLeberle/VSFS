@@ -2,11 +2,11 @@
 type Path = String
 
 data File = File String
-    deriving Show
+    deriving (Show, Eq)
 data DirID = Root | NonRoot String
     deriving (Show, Eq)
 data Directory = Directory DirID DirCont
-    deriving Show
+    deriving (Show, Eq)
 
 type Resource = Either File Directory
 type DirCont = [Resource]
@@ -29,7 +29,7 @@ The values in a PathChoice reprensent the following:
     directory *except for* the current directory of the filesystem, which 
     appears in the first coordinate in the definition of type FS above. -}
 data PathChoice = PathChoice DirID DirCont
-    deriving Show
+    deriving (Show, Eq)
 ---
 
 
@@ -37,7 +37,7 @@ data PathChoice = PathChoice DirID DirCont
 pwd :: FS -> Path
 pwd (_, []) = "/"
 pwd (dir, trail) = 
-    "/" ++ (concat (map pwdAux trail)) ++ (getNameDir dir)
+    "/" ++ (concat (map pwdAux (reverse trail))) ++ (getNameDir dir)
 
 pwdAux :: PathChoice -> Path
 pwdAux (PathChoice Root _) = ""
@@ -83,7 +83,7 @@ getDirById :: DirCont -> DirID -> Maybe Directory
 getDirById [] _ = Nothing
 getDirById (head : tail) dirId =
     case head of
-        (Left _) -> Nothing
+        (Left _) -> getDirById tail dirId
         (Right dir@(Directory headId dirContent)) ->
             if dirId == headId
             then Just dir
@@ -128,7 +128,7 @@ cd fs@(dir@(Directory dirId dirCont),trail) newDirId@(NonRoot newDir) =
     if not $ elem newDir (map getNameDir (getLocalDirs fs))
     then Nothing
     else Just ((\(Just x) -> x) (getDirById dirCont newDirId), 
-               (PathChoice dirId $ removeDir dirId dirCont) : trail)
+               (PathChoice dirId $ removeDir newDirId dirCont) : trail)
 ---
 
 
@@ -155,7 +155,7 @@ shallowFindDirs fs dir =
 
 {- Iterate shallowFindFiles down the directory structure, in a depth first 
 search fashion. We implement the DFS stack with a list of lists of 
-Directory, and pass it on to findAux. -}
+Directorys, and pass it on to findAux. -}
 find :: FS -> String -> Maybe [Path]
 find fs@(Directory _ dirCont, _) fileName = 
     findAux fs fileName [map getNameDir $ getLocalDirs fs]
@@ -166,11 +166,13 @@ findAux fs fileName listDirs =
         [] -> Just []
         head : tail -> 
             case head of 
-                [] -> 
+                [] ->
                     let localCheck = (if shallowFindFiles fs fileName 
-                                      then Just ((pwd fs) ++ "/" ++ fileName) 
+                                      then Just (printPath fs fileName) 
                                       else Nothing) in
-                    let recCheck = cdup fs >>= (\updatedFs -> findAux updatedFs fileName tail) in
+                    let recCheck = (if isRoot fs 
+                                    then Just []
+                                    else cdup fs >>= (\updatedFs -> findAux updatedFs fileName tail)) in
                         case (localCheck, recCheck) of
                             (_, Nothing) -> Nothing
                             (Nothing, Just recPaths) -> Just recPaths
@@ -180,4 +182,13 @@ findAux fs fileName listDirs =
                         Nothing -> Nothing
                         Just updatedFs -> 
                             findAux updatedFs fileName ((map getNameDir $ getLocalDirs updatedFs) : (dirsTail : tail))
+    where
+    isRoot :: FS -> Bool
+    isRoot (Directory Root _, _) = True
+    isRoot _                    = False
+
+    printPath :: FS -> String -> String
+    printPath (Directory Root _, _) fileName = "/" ++ fileName
+    printPath _                     fileName = (pwd fs) ++ "/" ++ fileName
 ---
+
