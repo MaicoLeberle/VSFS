@@ -1,5 +1,5 @@
 # VSFS
-**VSFS** (short for **V**ery **S**mall **F**ile **S**/ystem) is intended as a Haskell, command-line-based implementation of some of the usual dynamics present in file system managers.
+**VSFS** (short for **V**ery **S**imple **F**ile **S**/ystem) is intended as a Haskell, command-line-based implementation of some of the usual dynamics present in file system managers.
 
 \
 File systems are implemented as a pair **(d, t) ::(Directory, Trail)**, where
