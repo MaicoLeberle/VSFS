@@ -22,7 +22,9 @@ The VSFS manager accepts the following commands:
 
 + **cdup :: FS -> Maybe FS** takes a file system **fs1** as argument. If the current directory of **fs1** is the root of the file system, then **cdup fs1** returns **Nothing**. Otherwise, it returns **Just f2**, where **f2** is exactly like **fs1** except that the current directory has been changed to the one right above.
 
-+ **find :: FS -> String -> Maybe [Path]** takes a file system **fs1** and a string **s**, and returns **Just [p_1, ..., p_n]** (with n >= 0), where each **p_i** is an entire path from the root of the file system down to a file whose ID is **s**.
++ **find :: FS -> String -> Maybe [Path]** takes a file system **fs1** and a string **s** as arguments, and returns **Just [p_1, ..., p_n]** (with n >= 0), where each **p_i** is an entire path from the root of the file system down to a file whose ID is **s**.
+
++ **rmFile :: FS -> Path -> Maybe FS** takes a file system **fs1** and a path **p** as arguments. If **p** does not lead to a file starting from the current directory of **fs1**, then **rmFile fs1 p** returns **Nothing**. Otherwise, it returns **Just fs2**, where **f2** is exactly like **fs1** except that the file corresponding to **p** has been removed.
 
 \
 Being its first implementation, VSFS should be run from within [GHCi](https://docs.haskellstack.org/en/stable/ghci/). Here is an example of a session of VSFS in GHCi:
