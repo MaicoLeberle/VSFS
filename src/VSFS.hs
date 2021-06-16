@@ -1,3 +1,7 @@
+module VSFS where
+
+import Data.List.Split (splitOn)
+
 ---
 type Path = String
 
@@ -5,11 +9,15 @@ data File = File String
     deriving (Show, Eq)
 data DirID = Root | NonRoot String
     deriving (Show, Eq)
+---
+
+
+---
 data Directory = Directory DirID DirCont
     deriving (Show, Eq)
 
-type Resource = Either File Directory
 type DirCont = [Resource]
+type Resource = Either File Directory
 ---
 
 
@@ -100,6 +108,87 @@ addFile fs@(Directory dirId dirCont, trail) file@(File fileName) =
     if shallowFindFiles fs fileName
     then Nothing
     else Just (Directory dirId (Left file : dirCont), trail)
+---
+
+
+---
+rmFile :: FS -> String -> Maybe FS
+rmFile fs@(dir, trail) name = 
+    case rmFileAux dir $ (filter (/= "") . splitOn "/") name of
+        Nothing -> Nothing
+        Just newDir -> Just (newDir, trail)
+
+rmFileAux :: Directory -> [String] -> Maybe Directory
+rmFileAux dir [] = Just dir
+rmFileAux dir@(Directory dirID dirCont) (head:tail) = 
+    case tail of
+        [] -> 
+            if fileIsInContent head dirCont
+            then Just (Directory dirID $ filterFiles head dirCont)
+            else Nothing
+        (x:xs) -> 
+            if dirIsInContent head dirCont 
+            then
+                let maybeDirCont = map (applyrmFileAux head tail) dirCont 
+                in
+                    if elem Nothing maybeDirCont
+                    then Nothing
+                    else Just (Directory dirID (map extract maybeDirCont))
+            else Nothing
+    where
+        extract :: Maybe a -> a
+        extract = (\(Just x) -> x)
+
+        filterFiles :: String -> DirCont -> DirCont
+        filterFiles name [] = []
+        filterFiles name (x:xs) = 
+            case x of 
+                Left (File y) -> 
+                    if name == y
+                    then xs
+                    else x : filterFiles name xs
+                y@(_) -> y : filterFiles name xs
+
+        getDirsIDs :: DirCont -> [String]
+        getDirsIDs [] = []
+        getDirsIDs (x:xs) =
+            case x of 
+                Right dir@(Directory dID dCont) -> getDirID dir : getDirsIDs xs
+                _ -> getDirsIDs xs
+        
+
+        getDirID :: Directory -> String
+        getDirID (Directory Root _) = "/"
+        getDirID (Directory (NonRoot res) _) = res
+
+        applyrmFileAux :: String -> [String] -> Resource -> Maybe Resource
+        applyrmFileAux dirName _ res@(Left (File _)) = Just res
+        applyrmFileAux dirName tail res@(Right dir) 
+            | dirName == getDirID dir = 
+                case rmFileAux dir tail of
+                    Nothing -> Nothing
+                    Just newDir -> Just $ Right newDir 
+            | otherwise = Just res
+
+        fileIsInContent :: String -> [Resource] -> Bool
+        fileIsInContent fileName [] = False
+        fileIsInContent fileName (x:xs) = 
+            case x of
+                Left (File name) -> 
+                    if fileName == name 
+                    then True
+                    else fileIsInContent fileName xs
+                _         -> fileIsInContent fileName xs
+
+        dirIsInContent :: String -> [Resource] -> Bool
+        dirIsInContent dirName [] = False
+        dirIsInContent dirName (x:xs) = 
+            case x of
+                Right dir@(Directory _ _) -> 
+                    if dirName == getDirID dir 
+                    then True
+                    else dirIsInContent dirName xs
+                _         -> dirIsInContent dirName xs
 ---
 
 
