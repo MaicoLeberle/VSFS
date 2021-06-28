@@ -127,7 +127,7 @@ printUsageMenu = do
     outputStrLn ""
     outputStrLn "Usage:\n"
     outputStrLn "pwd\t\t\t\tPrints the current directory of the file system."
-    outputStrLn "ls\t\t\t\tLists the content of the current directory (the \"(d)\" indicates directories)."
+    outputStrLn "ls\t\t\t\tLists the content of the current directory (the \"(d)\" prefix indicates a directory)."
     outputStrLn $ "addFile fileName\t\tAdds a file called fileName to the current directory." ++
         " It prints an error message if the file already exists."
     outputStrLn $ "addDir directoryName\t\tAdds a directory called directoryName to the current directory." ++
