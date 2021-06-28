@@ -39,12 +39,6 @@ main = do
                                 do
                                     (if msg == "" then return () else outputStrLn msg)
                                     loop newFileSystem
-
-
-        outputStrLnNotEmpty :: String -> InputT IO ()
-        outputStrLnNotEmpty msg
-            | msg == "" = return ()
-            | otherwise = outputStrLn msg
 ---
 
 
