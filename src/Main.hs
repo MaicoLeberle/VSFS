@@ -37,7 +37,7 @@ main = do
                         else
                             let (newFileSystem, msg) = execRWS (runCommand input initFS) () fileSystem in
                                 do
-                                    outputStrLnNotEmpty msg
+                                    (if msg == "" then return () else outputStrLn msg)
                                     loop newFileSystem
 
 
@@ -54,7 +54,7 @@ runCommand input fileSystem =
     case parseCommand input of
         Left (AddDir dirId) -> addDirMonadic (Directory (NonRoot dirId) [])
         Left (AddFile fileId) -> addFileMonadic (File fileId)
-        Left (RmFile fileId) -> rmFileMonadic fileId -- implementation misisng
+        Left (RmFile fileId) -> rmFileMonadic fileId
         Left (Cd dirId) -> cdMonadic (NonRoot dirId)
         Left CdUp -> cdUpMonadic
         Left Pwd -> pwdMonadic
