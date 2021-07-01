@@ -35,10 +35,18 @@ main = do
                         if elem (map toLower input) quitSet
                         then return ()
                         else
-                            let (newFileSystem, msg) = execRWS (runCommand input initFS) () fileSystem in
+                            let (newFileSystem, msg) = runSession (runCommand input initFS) fileSystem in
                                 do
-                                    (if msg == "" then return () else outputStrLn msg)
+                                    when (msg /= "") $ outputStrLn msg
                                     loop newFileSystem
+<<<<<<< HEAD
+
+        outputStrLnNotEmpty :: String -> InputT IO ()
+        outputStrLnNotEmpty msg
+            | msg == "" = return ()
+            | otherwise = outputStrLn msg
+=======
+>>>>>>> 44780394603a7f027daf2a603040b7fca18e7c32
 ---
 
 
