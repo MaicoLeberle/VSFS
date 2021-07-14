@@ -39,14 +39,6 @@ main = do
                                 do
                                     when (msg /= "") $ outputStrLn msg
                                     loop newFileSystem
-<<<<<<< HEAD
-
-        outputStrLnNotEmpty :: String -> InputT IO ()
-        outputStrLnNotEmpty msg
-            | msg == "" = return ()
-            | otherwise = outputStrLn msg
-=======
->>>>>>> 44780394603a7f027daf2a603040b7fca18e7c32
 ---
 
 
