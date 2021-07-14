@@ -443,8 +443,7 @@ findAux fs fileName listDirs =
                             else 
                                 case cdUp fs of
                                     Left err -> Left err
-                                    Right updatedFs -> f
-                                    indAux updatedFs fileName tail) in
+                                    Right updatedFs -> findAux updatedFs fileName tail) in
                         case (localCheck, recCheck) of
                             (_, Left _) -> Left $ "ERROR"
                             (Left _, Right recResult) -> Right recResult
