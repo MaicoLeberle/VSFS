@@ -2,9 +2,11 @@ module Main where
 
 import VSFS
 
-import Data.Char
 import Control.Monad.RWS.Lazy
+
+import Data.Char (toLower)
 import Data.List.Split (splitOn)
+
 import System.Environment (getArgs)
 import System.Console.Haskeline
 
@@ -18,108 +20,195 @@ main = do
     putStrLn "Welcome to the VSFS file system manager."
     putStrLn "Type :h for usage information.\n"
 
-    {- Here I implement the actual functionalities of the program. -}
-    runInputT defaultSettings (loop initFS)
-    where
-        loop :: FS -> InputT IO ()
-        loop fileSystem = do
-            unitInput <- getInputLine "$ "
-            case unitInput of
-                Nothing -> return ()
-                Just input -> 
-                    if (map toLower input) == ":h"
-                    then do
-                        printUsageMenu
-                        loop fileSystem
-                    else
-                        if elem (map toLower input) quitSet
-                        then return ()
-                        else
-                            let (newFileSystem, msg) = runSession (runCommand input initFS) fileSystem in
-                                do
-                                    when (msg /= "") $ outputStrLn msg
-                                    loop newFileSystem
+    runInputT defaultSettings (loopMan initMan)
+
+    where 
+        parseArgs :: [String] -> IO ([String],[String])
+        parseArgs _ = return ([],[])
+
 ---
 
 
 ---
-runCommand :: String -> FS -> Session ()
-runCommand input fileSystem = 
+loopMan :: VSFSMan -> InputT IO ()
+loopMan manager = do
+    unitInput <- getInputLine "$ "
+    case unitInput of
+        Nothing -> return ()
+        Just inputRaw -> 
+            let input = map toLower inputRaw in 
+            if input == ":h"
+            then do
+                printManUsageMenu
+                loopMan manager
+            else
+                if elem (map toLower input) quitSet
+                then return ()
+                else 
+                    case runManCommand input manager of
+                        Left err -> do
+                            outputStrLn err
+                            loopMan manager
+                        Right (L listing) -> do
+                            lift listing
+                            loopMan manager 
+                        Right (V newMan) -> loopMan newMan
+                        Right (S (leftMan, rightMan)) -> 
+                            let fsName = (fst . head) rightMan in
+                            let fs = (snd . head) rightMan in
+                            let rest = tail rightMan in do
+                                outputStrLn $ 
+                                    "Switching to " ++ fsName ++ " file system."
+                                outputStrLn "Type :h for usage information.\n"
+                                updatedFS <- loopFS fs
+                                outputStrLn $
+                                    "Switching back to the manager level."
+                                outputStrLn "Type :h for usage information.\n"
+                                loopMan $ leftMan ++ [(fsName, updatedFS)] ++ rest
+
+
+data ResultAlternative = V VSFSMan | S (VSFSMan, VSFSMan) | L (IO ())
+type RunManCommandError = String
+type RunManCommandResult = Either RunManCommandError ResultAlternative
+
+runManCommand :: String -> VSFSMan -> RunManCommandResult
+runManCommand input manager =  
+    case parseManCommand input of
+        Right List -> Right $ L $ list manager
+        Right (Init fsName) -> 
+            case manager `initialize` fsName of
+                Left err -> Left err
+                Right newMan -> Right $ V newMan
+        Right (Delete fsName) -> 
+            case manager `delete` fsName of
+                Left err -> Left err
+                Right newMan -> Right $ V newMan
+        Right (Switch fsName) -> 
+            case manager `switch` fsName of
+                Left err -> Left err
+                Right switching -> Right $ S switching
+
+
+parseManCommand :: String -> Either String ManCommand
+parseManCommand input =
+    let (cmd:args) = splitOn " " input in
+        case cmd of
+            "list" -> 
+                if length args == 0
+                then Right $ List
+                else Left $ numberArgsError cmd 0
+            "init" -> 
+                if length args == 1
+                then Right $ Init (head args)
+                else Left $ numberArgsError cmd 1
+            "switch" -> 
+                if length args == 1
+                then Right $ Switch (head args)
+                else Left $ numberArgsError cmd 1
+            "delete" ->
+                if length args == 1
+                then Right $ Delete (head args)
+                else Left $ numberArgsError cmd 1
+            _ -> Left "Wrong command."
+
+
+numberArgsError :: String -> Int -> String
+numberArgsError str num = str ++ " takes exactly " ++ show num ++ " argument(s)."
+---
+
+
+---
+loopFS :: FS -> InputT IO FS
+loopFS fileSystem = do
+    unitInput <- getInputLine "$ "
+    case unitInput of
+        Nothing -> return fileSystem
+        Just input -> 
+            if (map toLower input) == ":h"
+            then do
+                printFSUsageMenu
+                loopFS fileSystem
+            else
+                if elem (map toLower input) quitSet
+                then return fileSystem
+                else
+                    let (newFileSystem, msg) = runSession (runCommand input) fileSystem in
+                        do
+                            when (msg /= "") $ outputStrLn msg
+                            loopFS newFileSystem
+
+
+runCommand :: String -> Session ()
+runCommand input = 
     case parseCommand input of
-        Left (AddDir dirId) -> addDirMonadic (Directory (NonRoot dirId) [])
-        Left (AddFile fileId) -> addFileMonadic (File fileId)
-        Left (RmFile fileId) -> rmFileMonadic fileId
-        Left (Cd dirId) -> cdMonadic (NonRoot dirId)
-        Left CdUp -> cdUpMonadic
-        Left Pwd -> pwdMonadic
-        Left Ls -> lsMonadic
-        Left (Find fileId) -> findMonadic fileId
-        Right errMsg -> tell errMsg
----
+        Right (AddDir dirId) -> addDirMonadic (Directory (NonRoot dirId) [])
+        Right (AddFile fileId) -> addFileMonadic (File fileId)
+        Right (RmFile fileId) -> rmFileMonadic fileId
+        Right (Cd dirId) -> cdMonadic (NonRoot dirId)
+        Right CdUp -> cdUpMonadic
+        Right Pwd -> pwdMonadic
+        Right Ls -> lsMonadic
+        Right (Find fileId) -> findMonadic fileId
+        Left errMsg -> tell errMsg
 
 
----
-parseArgs :: [String] -> IO ([String],[String])
-parseArgs _ = return ([],[])
----
-
-
----
-parseCommand :: String -> Either Command String
+parseCommand :: String -> Either String Command
 parseCommand input = 
-    case cmd of
-        "addDir" -> 
-            if length args == 1
-            then Left $ AddDir (head args)
-            else Right $ numberArgsError cmd 1
-        "addFile" -> 
-            if length args == 1
-            then Left $ AddFile (head args)
-            else Right $ numberArgsError cmd 1
-        "rmFile" -> 
-            if length args == 1
-            then Left $ RmFile (head args)
-            else Right $ numberArgsError cmd 1
-        "cd" ->
-            if length args == 1
-            then Left $ Cd (head args)
-            else Right $ numberArgsError cmd 1
-        "cdup" -> 
-            if length args == 0
-            then Left CdUp
-            else Right $ numberArgsError cmd 0
-        "pwd" -> 
-            if length args == 0
-            then Left Pwd
-            else Right $ numberArgsError cmd 0
-        "ls" ->
-            if length args == 0
-            then Left Ls
-            else Right $ numberArgsError cmd 0
-        "find" -> 
-            if length args == 1
-            then Left $ Find (head args)
-            else Right $ numberArgsError cmd 1
-        _ -> Right "Wrong command."
-    where
-        (cmd:args) = splitOn " " input
-
-        numberArgsError :: String -> Int -> String
-        numberArgsError str num = str ++ " takes exactly " ++ show num ++ " argument(s)."
+    let (cmd:args) = splitOn " " input in
+        case cmd of
+            "addDir" -> 
+                if length args == 1
+                then Right $ AddDir (head args)
+                else Left $ numberArgsError cmd 1
+            "addFile" -> 
+                if length args == 1
+                then Right $ AddFile (head args)
+                else Left $ numberArgsError cmd 1
+            "rmFile" -> 
+                if length args == 1
+                then Right $ RmFile (head args)
+                else Left $ numberArgsError cmd 1
+            "cd" ->
+                if length args == 1
+                then Right $ Cd (head args)
+                else Left $ numberArgsError cmd 1
+            "cdup" -> 
+                if length args == 0
+                then Right CdUp
+                else Left $ numberArgsError cmd 0
+            "pwd" -> 
+                if length args == 0
+                then Right Pwd
+                else Left $ numberArgsError cmd 0
+            "ls" ->
+                if length args == 0
+                then Right Ls
+                else Left $ numberArgsError cmd 0
+            "find" -> 
+                if length args == 1
+                then Right $ Find (head args)
+                else Left $ numberArgsError cmd 1
+            _ -> Left "Wrong command."
 ---
 
 
 ---
-createCommand :: (String, [String]) -> Command
-createCommand (cmd,xs) = AddDir ""
----
-
-
----
-printUsageMenu :: InputT IO ()
-printUsageMenu = do
+printManUsageMenu :: InputT IO ()
+printManUsageMenu = do
     outputStrLn ""
-    outputStrLn "Usage:\n"
+    outputStrLn "MANAGER USAGE:"
+    outputStrLn "list\t\t\t\tLists the file systems."
+    outputStrLn "init fileSystemName\t\tInitializes a file system called fileSystemName."
+    outputStrLn "switch fileSystemName\t\tGo to file system called fileSystemName."
+    outputStrLn "delete fileSystemName\t\tDeletes the file system called fileSystemName."
+    outputStrLn ""
+
+
+printFSUsageMenu :: InputT IO ()
+printFSUsageMenu = do
+    outputStrLn ""
+    outputStrLn "FILE SYSTEMS USAGE:"
+    outputStrLn "fsman\t\t\t\tReturn to the file systems manager."
     outputStrLn "pwd\t\t\t\tPrints the current directory of the file system."
     outputStrLn "ls\t\t\t\tLists the content of the current directory (the \"(d)\" prefix indicates a directory)."
     outputStrLn $ "addFile fileName\t\tAdds a file called fileName to the current directory." ++
