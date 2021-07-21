@@ -6,26 +6,109 @@ import Data.List.Split (splitOn)
 
 import Text.Pretty.Simple (pPrint)
 
-import Control.Monad.RWS.Lazy -- used for stateful computations.
+import Control.Monad.RWS.Lazy 
+    -- this is used to represent file system sessions.
 
 
 
 
-type Path = String
-
-data Command = 
-    AddDir String 
-    | AddFile String 
-    | RmFile String
-    | RmDir String -- this command is not implemented yet.
-    | Cd String 
-    | CdUp
-    | Pwd
-    | Ls
-    | Find String
+{-  IMPLEMENTATION OF THE FILE SYSTEMS MANAGER.
+    (See below for the implementation of file systems themselves. -}
+---
+type FSName = String
+type FSUnit = (FSName, FS)
+type VSFSMan = [FSUnit]
+{-  The VSFSMan type represents an application run, managing multiple file
+    systems. 
+-}
+---
 
 
 ---
+data ManCommand = 
+    List 
+    | Init String
+    | Switch String
+    | Delete String
+---
+
+
+---
+{-  Definition of error types, for error reports during VSFSMan 
+    manipulation. 
+-}
+type InitError = String
+type InitResult = Either InitError VSFSMan
+
+type SwitchError = String
+type SwitchResult = Either SwitchError (VSFSMan, VSFSMan)
+    -- Note the right type here: if the file system has been found, the 
+    -- we split the VSFSMan value in two, where the head of the second 
+    -- coordinate is the found file system.
+
+type DeleteError = String
+type DeleteResult = Either DeleteError VSFSMan
+
+
+initMan :: VSFSMan
+initMan = []
+---
+
+
+
+---
+list :: VSFSMan -> IO ()
+list = sequence_ . (map (putStrLn . fst))
+---
+
+
+---
+initialize :: VSFSMan -> FSName -> InitResult  
+initialize manager fsName 
+    | elem fsName $ map fst manager = 
+        Left $ "A file system called " ++ fsName ++ " already exists."
+    | otherwise = Right $ (fsName, initFS) : manager
+---
+
+
+---
+switch :: VSFSMan -> FSName -> SwitchResult
+switch manager fsName 
+    | not $ elem fsName $ map fst manager = 
+        Left $ "No file system called " ++ fsName ++ " has been found."
+    | otherwise = manager `splitAt` fsName
+
+    where 
+        splitAt :: VSFSMan -> FSName -> SwitchResult
+        [] `splitAt` fsName = 
+            Left $ "No file system called " ++ fsName ++ " has been found."
+        man@(x:xs) `splitAt`fsName 
+            | fst x == fsName = Right $ ([], man)
+            | otherwise = 
+                case xs `splitAt` fsName of 
+                    Left err -> Left err
+                    Right auxMan -> Right $ (x : fst auxMan, snd auxMan)
+---
+
+
+---
+delete :: VSFSMan -> FSName -> DeleteResult
+delete [] fsName = Left $ "No file system called " ++ fsName ++ " has been found."
+delete (x:xs) fsName 
+    | fst x == fsName = Right $ xs
+    | otherwise =
+        case delete xs fsName of
+            Left err -> Left err
+            Right newMan -> Right $ x : newMan
+---
+
+
+
+
+{- IMPLEMENTATION OF THE COMMANDS SUPPORTED BY A FILE SYSTEM. -}
+
+---
+type Path = String
 type Resource = Either File Directory
 
 data File = File String deriving (Show)
@@ -78,6 +161,21 @@ runSession session fs = execRWS session () fs
 
 
 ---
+data Command = 
+    AddDir String 
+    | AddFile String 
+    | RmFile String
+    | RmDir String 
+        -- this command is not implemented yet.
+    | Cd String 
+    | CdUp
+    | Pwd
+    | Ls
+    | Find String
+---
+
+
+---
 {- Definitions of error types, for error reports during FSs manipulation. -}
 type AddError = String
 type AddResult = Either AddError FS
@@ -106,7 +204,8 @@ getLocalDirs (Directory dirId dirCont, trail) =
         (head : tail) ->
             case head of
                 (Left _) -> getLocalDirs (Directory dirId tail, trail)
-                (Right dir) -> dir : (getLocalDirs (Directory dirId tail, trail))
+                (Right dir) -> 
+                    dir : (getLocalDirs (Directory dirId tail, trail))
  
 getLocalFiles :: FS -> [File]
 getLocalFiles (Directory dirId dirCont, trail) =
@@ -114,7 +213,8 @@ getLocalFiles (Directory dirId dirCont, trail) =
         [] -> []
         (head : tail) ->
             case head of
-                (Left file) -> file : (getLocalFiles (Directory dirId tail, trail))
+                (Left file) -> 
+                    file : (getLocalFiles (Directory dirId tail, trail))
                 (Right _) -> getLocalFiles (Directory dirId tail, trail)
 
 getDirID :: Directory -> DirID
@@ -143,7 +243,10 @@ getFileName (File file) = file
 
 
 
-{- IMPLEMENTATION OF THE COMMANDS SUPPORTED BY VSFS. -}
+
+
+
+{- IMPLEMENTATION OF THE COMMANDS SUPPORTED BY EACH FILE SYSTEM. -}
 
 ---
 {- COMMAND: pwd -}
@@ -269,7 +372,10 @@ rmFileAux dir@(Directory dirID dirCont) (localDir:restOfPath) =
                 let Just dirToUpdate = getDirById dirCont $ NonRoot localDir in
                 case rmFileAux dirToUpdate restOfPath of
                     Left err -> Left err
-                    Right updatedDir -> Right $ Directory dirID $ replaceDir dirCont localDir updatedDir
+                    Right updatedDir -> 
+                        Right $ 
+                            Directory dirID $ 
+                                replaceDir dirCont localDir updatedDir
             else Left "Path does not exist." -- head 
 
     where
