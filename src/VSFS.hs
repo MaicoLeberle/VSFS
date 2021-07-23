@@ -11,6 +11,9 @@ import Control.Monad.RWS.Lazy
 
 
 
+(>$<) = (flip (<$>))
+
+
 
 {-  IMPLEMENTATION OF THE FILE SYSTEMS MANAGER.
     (See below for the implementation of file systems themselves. -}
@@ -58,7 +61,7 @@ initMan = []
 
 ---
 list :: VSFSMan -> IO ()
-list = sequence_ . (map (putStrLn . fst))
+list = mapM_ (putStrLn . fst)
 ---
 
 
@@ -85,9 +88,8 @@ switch manager fsName
         man@(x:xs) `splitAt`fsName 
             | fst x == fsName = Right $ ([], man)
             | otherwise = 
-                case xs `splitAt` fsName of 
-                    Left err -> Left err
-                    Right auxMan -> Right $ (x : fst auxMan, snd auxMan)
+                xs `splitAt` fsName 
+                >$< (\auxMan -> (x : fst auxMan, snd auxMan))
 ---
 
 
@@ -96,10 +98,7 @@ delete :: VSFSMan -> FSName -> DeleteResult
 delete [] fsName = Left $ "No file system called " ++ fsName ++ " has been found."
 delete (x:xs) fsName 
     | fst x == fsName = Right $ xs
-    | otherwise =
-        case delete xs fsName of
-            Left err -> Left err
-            Right newMan -> Right $ x : newMan
+    | otherwise = delete xs fsName >$< (x :)
 ---
 
 
@@ -111,11 +110,24 @@ delete (x:xs) fsName
 type Path = String
 type Resource = Either File Directory
 
-data File = File String deriving (Show)
+data File = File { getFileName :: String } 
+    deriving (Eq, Show)
 
-data DirID = Root | NonRoot String deriving (Show, Eq)
+data DirID = DirID {
+        isRoot :: Bool,
+        getDirName :: String}
+    deriving (Eq, Show)
+
+
 type DirCont = [Resource]
-data Directory = Directory DirID DirCont deriving (Show)
+data Directory = Directory {
+        getDirID :: DirID,
+        getDirCont :: DirCont}
+    deriving (Eq, Show)
+
+
+getDirectoryName :: Directory -> String
+getDirectoryName = getDirName . getDirID
 ---
 
 
@@ -129,7 +141,11 @@ data Directory = Directory DirID DirCont deriving (Show)
     directory *except for* the current directory of the filesystem, which 
     appears in the first coordinate in the definition of type FS above. 
 -}
-data PathChoice = PathChoice DirID DirCont deriving (Show)
+data PathChoice = PathChoice {
+    getPwdId :: DirID,
+    getPwdCont :: DirCont}
+    deriving (Eq, Show)
+
 type Trail = [PathChoice]
 ---
 
@@ -142,7 +158,13 @@ and downwards. -}
 type FS = (Directory, Trail) 
 
 initFS :: FS
-initFS = (Directory Root [], [])
+initFS = (
+    Directory {
+        getDirID = DirID {
+            isRoot = True, 
+            getDirName = "/"}, 
+        getDirCont = []},
+    [])
 ---
 
 
@@ -198,14 +220,14 @@ type CdUpResult = Either CdUpError FS
 ---
 {- First, some getter functions to work around with. -}
 getLocalDirs :: FS -> [Directory]
-getLocalDirs (Directory dirId dirCont, trail) = 
-    case dirCont of
+getLocalDirs (dir, trail) =
+    case getDirCont dir of
         [] -> []
-        (head : tail) ->
-            case head of
-                (Left _) -> getLocalDirs (Directory dirId tail, trail)
-                (Right dir) -> 
-                    dir : (getLocalDirs (Directory dirId tail, trail))
+        (x : xs) ->
+            case x of
+                (Left _) -> getLocalDirs (dir{getDirCont = xs}, trail)
+                (Right d) -> d : (getLocalDirs (dir{getDirCont = xs}, trail))
+
  
 getLocalFiles :: FS -> [File]
 getLocalFiles (Directory dirId dirCont, trail) =
@@ -217,28 +239,23 @@ getLocalFiles (Directory dirId dirCont, trail) =
                     file : (getLocalFiles (Directory dirId tail, trail))
                 (Right _) -> getLocalFiles (Directory dirId tail, trail)
 
-getDirID :: Directory -> DirID
-getDirID (Directory dirId _) = dirId
 
-getDirName :: Directory -> String
-getDirName dir = 
-    case getDirID dir of
-        Root -> "/"
-        NonRoot name -> name
+-- getDirName :: Directory -> String
+-- getDirName dir =
+--     case getDirID dir of
+--         Root -> "/"
+--         NonRoot name -> name
 
 
 getDirById :: DirCont -> DirID -> Maybe Directory
 getDirById [] _ = Nothing
-getDirById (head : tail) dirId =
-    case head of
-        (Left _) -> getDirById tail dirId
-        (Right dir@(Directory headId dirContent)) ->
-            if dirId == headId
+getDirById (x : xs) dirId =
+    case x of
+        (Left _) -> getDirById xs dirId
+        (Right dir) ->
+            if dirId == getDirID dir
             then Just dir
-            else getDirById tail dirId
-
-getFileName :: File -> String
-getFileName (File file) = file
+            else getDirById xs dirId
 ---
 
 
@@ -262,11 +279,14 @@ pwdMonadic = get >>= tell . pwd
 pwd :: FS -> Path
 pwd (_, []) = "/"
 pwd (dir, trail) = 
-    "/" ++ (concat (map pwdAux (reverse trail))) ++ (getDirName dir)
+    "/" ++ (concat (map pwdAux (reverse trail))) ++ (getDirectoryName dir)
     where
         pwdAux :: PathChoice -> Path
-        pwdAux (PathChoice Root _) = ""
-        pwdAux (PathChoice (NonRoot dirId) _) = dirId ++ "/"
+        pwdAux p
+            | (isRoot . getPwdId) p = ""
+            | otherwise = (getDirName . getPwdId $ p) ++ "/"
+        -- pwdAux (PathChoice Root _) = "" 
+        -- pwdAux (PathChoice (NonRoot dirId) _) = dirId ++ "/"
 ---
 
 
@@ -287,7 +307,7 @@ ls :: FS -> [String]
 ls (Directory dirID dirCont, trail) = map getNameResource dirCont
     where 
         getNameResource :: Resource -> String
-        getNameResource (Right dir) = "(d)" ++ getDirName dir
+        getNameResource (Right dir) = "(d)" ++ getDirectoryName dir
         getNameResource (Left file) = getFileName file
 
 mapNotLast :: (a -> a) -> [a] -> [a]
@@ -369,26 +389,23 @@ rmFileAux dir@(Directory dirID dirCont) (localDir:restOfPath) =
         _ -> -- Path has not yet been fully consumed.
             if dirIsInContent localDir dirCont 
             then 
-                let Just dirToUpdate = getDirById dirCont $ NonRoot localDir in
-                case rmFileAux dirToUpdate restOfPath of
-                    Left err -> Left err
-                    Right updatedDir -> 
-                        Right $ 
-                            Directory dirID $ 
-                                replaceDir dirCont localDir updatedDir
-            else Left "Path does not exist." -- head 
+                let Just dirToUpdate = getDirById dirCont DirID {
+                        isRoot = False,
+                        getDirName = localDir}
+                in
+                    rmFileAux dirToUpdate restOfPath >$<
+                    (\updatedDir -> 
+                        Directory dirID $
+                            replaceDir dirCont localDir updatedDir)
+            else Left "Path does not exist." 
 
     where
         replaceDir :: DirCont -> String -> Directory -> DirCont
         replaceDir dirCont dirName newDir = 
-            map (\res -> 
-                case res of
-                    Left file -> Left file
-                    Right oldDir -> 
-                        Right $
-                            if dirName == getDirName oldDir 
-                            then newDir 
-                            else oldDir) 
+            map ((\oldDir ->
+                    if dirName == getDirectoryName oldDir
+                    then newDir
+                    else oldDir) <$>)
                 dirCont
 
 
@@ -416,7 +433,7 @@ rmFileAux dir@(Directory dirID dirCont) (localDir:restOfPath) =
         dirIsInContent dirName (x:xs) = 
             case x of
                 Right dir -> 
-                    dirName == getDirName dir || dirIsInContent dirName xs
+                    dirName == getDirectoryName dir || dirIsInContent dirName xs
                 _         -> dirIsInContent dirName xs
 ---
 
@@ -440,7 +457,7 @@ addDirMonadic dir = get >>=
 addDir :: FS -> Directory -> AddResult
 addDir fs@(Directory dirId dirCont, trail) dir
     | shallowFindDirs fs dir = 
-        Left $ "Directory " ++ (getDirName dir) ++ " already exists." 
+        Left $ "Directory " ++ (getDirectoryName dir) ++ " already exists." 
     | otherwise = 
         Right (Directory dirId (dirCont ++ [Right dir]), trail)
 ---
@@ -464,12 +481,15 @@ cdMonadic dirId = get >>=
 
 
 cd :: FS -> DirID -> CdResult
-cd _ Root = Left "Cannot change directory to root."
-cd fs@(dir@(Directory dirId dirCont),trail) newDirId@(NonRoot newDir) = 
-    if not $ elem newDir (map getDirName (getLocalDirs fs))
-    then Left $ "Directory " ++ newDir ++ " does not exist."
-    else Right $ ((\(Just x) -> x) (getDirById dirCont newDirId), 
-               (PathChoice dirId $ removeDir newDirId dirCont) : trail)
+cd fs dirId 
+    | isRoot dirId = Left "Cannot change directory to root."
+    | otherwise = 
+        if not $ elem (getDirName dirId) (map getDirectoryName (getLocalDirs fs))
+        then Left $ "Directory " ++ (getDirName dirId) ++ " does not exist."
+        else Right $ 
+            let fsCont = getDirCont . fst $ fs in
+            let Just newFs = getDirById fsCont dirId in
+                (newFs, PathChoice {getPwdId = dirId, getPwdCont = removeDir dirId fsCont} : (snd fs))
 
 
 removeDir :: DirID -> DirCont ->  DirCont
@@ -525,7 +545,7 @@ findMonadic fileName = get >>=
 
 find :: FS -> String -> FindResult
 find fs@(Directory _ dirCont, _) fileName = 
-    case findAux fs fileName [map getDirName $ getLocalDirs fs] of
+    case findAux fs fileName [map getDirectoryName $ getLocalDirs fs] of
         Left err -> Left err
         Right (auxFs, paths) -> 
             Right $ (fs, reverse paths) -- I discard auxFs and restore fs. 
@@ -544,35 +564,39 @@ findAux fs fileName listDirs =
                     let localCheck = (if shallowFindFiles fs fileName 
                                       then Right $ (printPath fs fileName) 
                                       else Left "") in
-                    let recCheck = (if isRoot fs 
-                            then Right (fs,[])
-                            else 
-                                case cdUp fs of
-                                    Left err -> Left err
-                                    Right updatedFs -> findAux updatedFs fileName tail) in
+                    let recCheck = (if fsIsRoot fs 
+                        then Right (fs,[]) 
+                        else cdUp fs 
+                            >>= 
+                            (\updatedFs -> findAux updatedFs fileName tail))
+                    in
                         case (localCheck, recCheck) of
-                            (_, Left _) -> Left $ "ERROR"
-                            (Left _, Right recResult) -> Right recResult
-                            (Right localFile, Right (_, recPaths)) -> 
-                                Right (fs, localFile : recPaths)
-                dirName : dirsTail -> case cd fs (NonRoot dirName) of
-                    Left msg -> Left msg
-                    Right updatedFs -> findAux
+                        (_, Left _) -> Left $ "ERROR"
+                        (Left _, Right recResult) -> Right recResult
+                        (Right localFile, Right (_, recPaths)) -> 
+                            Right (fs, localFile : recPaths)
+                dirName : dirsTail -> 
+                    cd fs DirID {isRoot = False, getDirName = dirName}
+                    >>=
+                    (\updatedFs -> findAux
                         updatedFs
-                        fileName 
-                        ((map getDirName $ getLocalDirs updatedFs) 
-                            : (dirsTail : tail))
+                        fileName
+                        ((map getDirectoryName $ getLocalDirs updatedFs) 
+                                : (dirsTail : tail)))
     where
-    isRoot :: FS -> Bool
-    isRoot = ((==) Root) . getDirID . fst 
+
+    fsIsRoot :: FS -> Bool
+    fsIsRoot = isRoot . getDirID . fst
 
     printPath :: FS -> String -> String
-    printPath (Directory Root _, _) fileName = "/" ++ fileName
-    printPath _                     fileName = (pwd fs) ++ "/" ++ fileName
+    printPath fs fileName = 
+        let prefix = if fsIsRoot fs then "/" else (pwd fs) ++ "/"
+        in
+            prefix ++ fileName
 
 
 {- Search for a directory in the FS's current directory. -}
 shallowFindDirs :: FS -> Directory -> Bool
 shallowFindDirs fs dir = 
-    elem (getDirName dir) (map getDirName (getLocalDirs fs))
+    elem (getDirectoryName dir) (map getDirectoryName (getLocalDirs fs))
 ---

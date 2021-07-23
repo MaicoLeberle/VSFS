@@ -1,4 +1,4 @@
-module Main where
+module Main (main) where
 
 import VSFS
 
@@ -74,19 +74,13 @@ type RunManCommandResult = Either RunManCommandError ResultAlternative
 runManCommand :: String -> VSFSMan -> RunManCommandResult
 runManCommand input manager =  
     case parseManCommand input of
-        Right List -> Right $ L $ list manager
+        Right List -> Right . L $ list manager
         Right (Init fsName) -> 
-            case manager `initialize` fsName of
-                Left err -> Left err
-                Right newMan -> Right $ V newMan
+            manager `initialize` fsName >$< V  
         Right (Delete fsName) -> 
-            case manager `delete` fsName of
-                Left err -> Left err
-                Right newMan -> Right $ V newMan
+            manager `delete` fsName >$< V
         Right (Switch fsName) -> 
-            case manager `switch` fsName of
-                Left err -> Left err
-                Right switching -> Right $ S switching
+            manager `switch` fsName >$< S
 
 
 parseManCommand :: String -> Either String ManCommand
@@ -141,10 +135,18 @@ loopFS fileSystem = do
 runCommand :: String -> Session ()
 runCommand input = 
     case parseCommand input of
-        Right (AddDir dirId) -> addDirMonadic (Directory (NonRoot dirId) [])
+        Right (AddDir dirId) -> 
+            addDirMonadic $ Directory {
+                getDirID = DirID {
+                    isRoot = False,
+                    getDirName = dirId}, 
+                getDirCont = []}
         Right (AddFile fileId) -> addFileMonadic (File fileId)
         Right (RmFile fileId) -> rmFileMonadic fileId
-        Right (Cd dirId) -> cdMonadic (NonRoot dirId)
+        Right (Cd dirId) -> 
+            cdMonadic $ DirID {
+                isRoot = False,
+                getDirName = dirId}
         Right CdUp -> cdUpMonadic
         Right Pwd -> pwdMonadic
         Right Ls -> lsMonadic
