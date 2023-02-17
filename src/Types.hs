@@ -50,6 +50,7 @@ data Command =
       Pwd
     | Ls
     | MkDir String
+    | RmDir String
     | Cd String
     | CdUp
     | AddFile String

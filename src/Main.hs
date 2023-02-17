@@ -18,7 +18,7 @@ main = do
     -- args <- getArgs
     -- (keys, values) <- parseArgs args
     putStrLn "Welcome to the VSFS file system manager."
-    putStrLn "Type :h for usage information.\n"
+    putStrLn "Type :h for help.\n"
     runInputT defaultSettings (loopMan initMan)
     -- where
     --   parseArgs :: [String] -> IO ([String],[String])
@@ -45,24 +45,24 @@ loopMan man = do
         ]
 
     runManCommand :: String -> InputT IO VSFSMan
-    runManCommand input = case runManCommand' input of
+    runManCommand input = case runManCommandAux input of
         Right (L l) -> mapM_ (lift . putStrLn) l >> return man
         Right (V newMan) -> return newMan
-        Right (S (leftMan, [])) -> do
-            outputStrLn "File system could not be created."
-            return man
+        Right (S (leftMan, [])) ->
+            outputStrLn "File system could not be created." >> return man
         Right (S (leftMan, (fsName, fs) : rest)) -> do
-            outputStrLn $
-                "Switching to " ++ fsName ++ " file system.\n"
-                    ++ "Type :h for usage information.\n"
+            outputStrLn $ concat [ "Switching to "
+                                 , fsName
+                                 , " file system.\nType :h for help.\n"
+                                 ]
             updatedFS <- loopFS fs
             outputStrLn "Switching back to the manager level."
             outputStrLn "Type :h for usage information.\n"
             return $ leftMan ++ [(fsName, updatedFS)] ++ rest
         Left err -> outputStrLn err >> return man
 
-    runManCommand' :: String -> Either String ResultAlternative
-    runManCommand' input = parseManCommand input >>= \case
+    runManCommandAux :: String -> Either String ResultAlternative
+    runManCommandAux input = parseManCommand input >>= \case
         List          -> return $ L $ list man
         Init fsName   -> fsName `initialize` man  >>= return . V
         Delete fsName -> fsName `delete` man >>= return . V
@@ -101,6 +101,7 @@ loopFS fs = getInputLine "$ " >>= \case
         , "ls\t\tLists the content of the current directory (the \"(d)\" prefix"
         , " indicates a directory).\n"
         , "mkDir d\t\tAdds directory d within the current directory.\n"
+        , "rmDir d\t\tRemoves directory d from the current directory.\n"
         , "cd d\t\tEnters directory d located in the current directory.\n"
         , "cdUp\t\tChanges directory to the immediate parent of the current "
         , "directory.\n"
@@ -117,7 +118,8 @@ runCommand input =
     case parseCommand input of
         Right Pwd              -> pwdMonadic
         Right Ls               -> lsMonadic
-        Right (MkDir dirId)    -> mkDirMonadic (Directory (NonRoot dirId) [])
+        Right (MkDir dirId)    -> mkDirMonadic dirId
+        Right (RmDir dirId)    -> rmDirMonadic dirId
         Right (Cd dirId)       -> cdMonadic (NonRoot dirId)
         Right CdUp             -> cdUpMonadic
         Right (AddFile fileId) -> addFileMonadic fileId
@@ -130,6 +132,8 @@ parseCommand input =
     let (cmd:args) = splitOn " " input
     in case cmd of
         "mkDir"   | length args == 1 -> Right $ MkDir (head args)
+                  | otherwise        -> Left $ numberArgsError cmd 1
+        "rmDir"   | length args == 1 -> Right $ RmDir (head args)
                   | otherwise        -> Left $ numberArgsError cmd 1
         "addFile" | length args == 1 -> Right $ AddFile (head args)
                   | otherwise        -> Left $ numberArgsError cmd 1

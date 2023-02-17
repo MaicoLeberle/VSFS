@@ -70,6 +70,90 @@ ls (Directory _ dirCont, _) = map getName dirCont
     getName d@(Dir _) = "(d)" ++ getResName d
     getName f = getResName f
 
+rmDirMonadic :: String -> Session
+rmDirMonadic id = do
+    fs@(Directory current content, trail) <- get
+    case id `shallowFindDir` content of
+        Just d -> put ( Directory current (filterDir (NonRoot id) content)
+                      , trail
+                      )
+        Nothing -> tell $ "Directory " ++ show id ++ " not found."
+  where
+    filterDir :: DirID -> DirCont -> DirCont
+    filterDir dId [] = []
+    filterDir dId (dir@(Dir (Directory dId' _)):xs)
+        | dId == dId' = xs
+        | otherwise   = dir : filterDir dId xs
+    filterDir dId (f : xs) = f : filterDir dId xs
+
+{-| Search for a directory in the file system's current directory. -}
+shallowFindDir :: String -> DirCont -> Maybe Directory
+_ `shallowFindDir` [] = Nothing
+id `shallowFindDir` (File _ : rs) = id `shallowFindDir` rs
+id `shallowFindDir` (Dir d@(Directory id' _): rs)
+    | NonRoot id == id' = Just d
+    | otherwise = id `shallowFindDir` rs
+
+{-  Get the FS encapsulated in the RWS monad and apply `mkDir` to it.
+    If there is an error, print it. Otherwise, update the state (i.e., the
+    FS) by adding the new directory.
+-}
+mkDirMonadic :: String -> Session
+mkDirMonadic id = do
+    fs@(Directory id' dirCont, trail) <- get
+    case id `shallowFindDir` dirCont of
+        Just  _ -> tell $ "Directory " ++ show id ++ " already exists."
+        Nothing ->
+            put ( Directory id' (dirCont ++ [Dir (Directory (NonRoot id) [])])
+                , trail
+                )
+
+{-| `get` the file system, apply pure function `cd` to it, and `put` the result.
+    Report any possible errors.
+-}
+cdMonadic :: DirID -> Session
+cdMonadic dirId = do
+    fs <- get
+    case cd fs dirId of
+        Left err -> tell err
+        Right newFs -> put newFs
+
+{-| Update the current directory of the fiel system and extend the list of
+    PathChoice's by adding the former current directory.
+-}
+cd :: FS -> DirID -> Either String FS
+cd _ Root = Left "Cannot change directory to root."
+cd fs@(dir@(Directory dirId dirCont),trail) newDirId@(NonRoot newDir) =
+    if elem newDir $ map (getResName . Dir) $ getLocalDirs fs
+    then let Just dir = getDirById dirCont newDirId
+         in Right (dir, (PathChoice dirId $ removeDir newDirId dirCont) : trail)
+    else Left $ "Directory " ++ newDir ++ " could not be found."
+
+removeDir :: DirID -> DirCont ->  DirCont
+removeDir dirId [] = []
+removeDir dirId (head : tail) = case head of
+    file@(File _) -> file : (removeDir dirId tail)
+    dir@(Dir (Directory id cont)) | dirId == id -> removeDir dirId tail
+                                  | otherwise   -> dir : (removeDir dirId tail)
+
+{-  Apply cdUp on the current file system. If there is an error, tell it.
+    Otherwise, update the file system by changing the focused directory to the
+    immediate parent of the current one.
+-}
+cdUpMonadic :: Session
+cdUpMonadic = do
+    fs <- get
+    case cdUp fs of
+        Left err    -> tell err
+        Right newFs -> put newFs
+
+{-  NOTE: the zipper structure of FSs makes switching to the immediate parent
+    directory of the current one quite easy. -}
+cdUp :: FS -> Either String FS
+cdUp (_, []) = Left $ "Already in root directory."
+cdUp (currentDir, (PathChoice parID parCont) : trail) =
+    Right $ (Directory parID $ (Dir currentDir) : parCont, trail)
+
 {-  Get the FS encapsulated in the RWS monad and apply addFile to it.
     If there is an error, print it. Otherwise, update the file system.
 -}
@@ -150,70 +234,6 @@ rmFileAux dir@(Directory dirID dirCont) (currDir:tail) = case tail of
                                          | otherwise = dirInDirCont d xs
         dirInDirCont d (_ : xs) = dirInDirCont d xs
 
-{-  Get the FS encapsulated in the RWS monad and apply `mkDir` to it.
-    If there is an error, print it. Otherwise, update the state (i.e., the
-    FS) by adding the new directory.
--}
-mkDirMonadic :: Directory -> Session
-mkDirMonadic dir = do
-    fs <- get
-    case mkDir fs dir of
-        Left err -> tell err
-        Right newFs -> put newFs
-
-mkDir :: FS -> Directory -> Either String FS
-mkDir fs@(Directory dirId dirCont, trail) dir
-    | shallowFindDirs fs dir =
-        Left $ "Directory " ++ (getResName $ Dir dir) ++ " already exists."
-    | otherwise =
-        Right (Directory dirId (dirCont ++ [Dir dir]), trail)
-
-{-| `get` the file system, apply pure function `cd` to it, and `put` the result.
-    Report any possible errors.
--}
-cdMonadic :: DirID -> Session
-cdMonadic dirId = do
-    fs <- get
-    case cd fs dirId of
-        Left err -> tell err
-        Right newFs -> put newFs
-
-{-| Update the current directory of the fiel system and extend the list of
-    PathChoice's by adding the former current directory.
--}
-cd :: FS -> DirID -> Either String FS
-cd _ Root = Left "Cannot change directory to root."
-cd fs@(dir@(Directory dirId dirCont),trail) newDirId@(NonRoot newDir) =
-    if elem newDir $ map (getResName . Dir) $ getLocalDirs fs
-    then let Just dir = getDirById dirCont newDirId
-         in Right (dir, (PathChoice dirId $ removeDir newDirId dirCont) : trail)
-    else Left $ "Directory " ++ newDir ++ " could not be found."
-
-removeDir :: DirID -> DirCont ->  DirCont
-removeDir dirId [] = []
-removeDir dirId (head : tail) = case head of
-    file@(File _) -> file : (removeDir dirId tail)
-    dir@(Dir (Directory id cont)) | dirId == id -> removeDir dirId tail
-                                  | otherwise   -> dir : (removeDir dirId tail)
-
-{-  Apply cdUp on the current file system. If there is an error, tell it.
-    Otherwise, update the file system by changing the focused directory to the
-    immediate parent of the current one.
--}
-cdUpMonadic :: Session
-cdUpMonadic = do
-    fs <- get
-    case cdUp fs of
-        Left err    -> tell err
-        Right newFs -> put newFs
-
-{-  NOTE: the zipper structure of FSs makes switching to the immediate parent
-    directory of the current one quite easy. -}
-cdUp :: FS -> Either String FS
-cdUp (_, []) = Left $ "Already in root directory."
-cdUp (currentDir, (PathChoice parID parCont) : trail) =
-    Right $ (Directory parID $ (Dir currentDir) : parCont, trail)
-
 findMonadic :: String -> Session
 findMonadic f = do
     fs@(Directory _ dirCont, _) <- get
@@ -244,12 +264,6 @@ findAux f ((dir : dirsTail) : tail) fs = do
     findAux f
             ((map (getResName . Dir) $ getLocalDirs updFs): (dirsTail : tail))
             updFs
-
-{-| Search for a directory in the file system's current directory. -}
-shallowFindDirs :: FS -> Directory -> Bool
-shallowFindDirs fs dir =
-    elem (getResName $ Dir dir) (map (getResName . Dir) (getLocalDirs fs))
-
 
 -- | Getters.
 getLocalDirs :: FS -> [Directory]
