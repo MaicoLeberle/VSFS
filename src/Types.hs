@@ -47,14 +47,14 @@ data ManCommand = List | Init String | Switch String | Delete String
   deriving (Eq, Show)
 
 data Command =
-      MkDir String
-    | Pwd
+      Pwd
     | Ls
+    | MkDir String
     | Cd String
     | CdUp
-    | Find String
     | AddFile String
     | RmFile String
+    | Find String
   deriving (Eq, Show)
 
 {-| Stateful computations are implemented via the (lazy version of the) RWS

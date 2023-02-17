@@ -37,10 +37,11 @@ loopMan man = do
     printManUsageMenu :: InputT IO ()
     printManUsageMenu = outputStrLn $ concat
         [ "\nMANAGER USAGE:\n"
-        , "list\t\tLists the file systems.\n"
+        , "list\t\tLists all the file systems.\n"
         , "init fs\t\tInitializes a file system called fs.\n"
-        , "switch fs\tGo to file system fs.\n"
-        , "delete fs\tDeletes file system fs\n\n"
+        , "switch fs\tSwitches to file system manager for fs.\n"
+        , "delete fs\tDeletes file system fs.\n"
+        , ":q\t\tQuit.\n"
         ]
 
     runManCommand :: String -> InputT IO VSFSMan
@@ -92,17 +93,35 @@ loopFS fs = getInputLine "$ " >>= \case
                     let (newFS, msg) = runSession (runCommand input) fs
                     in when (msg /= "") (outputStrLn msg) >> loopFS newFS
     Nothing -> return fs
+  where
+    printFSUsageMenu :: InputT IO ()
+    printFSUsageMenu = outputStrLn $ concat
+        [ "\nFILE SYSTEMS USAGE:\n"
+        , "pwd\t\tPrints the current directory of the file system.\n"
+        , "ls\t\tLists the content of the current directory (the \"(d)\" prefix"
+        , " indicates a directory).\n"
+        , "mkDir d\t\tAdds directory d within the current directory.\n"
+        , "cd d\t\tEnters directory d located in the current directory.\n"
+        , "cdUp\t\tChanges directory to the immediate parent of the current "
+        , "directory.\n"
+        , "addFile f\tAdds file f to the current directory.\n"
+        , "rmFile p\tRemoves file located at path p, starting from the current "
+        , "directory.\n"
+        , "find f\t\tPrints complete path of each occurrence of file f under "
+        , "the current directory.\n"
+        , ":q\t\tReturn to the file systems manager.\n"
+        ]
 
 runCommand :: String -> Session
 runCommand input =
     case parseCommand input of
-        Right (MkDir dirId)    -> mkDirMonadic (Directory (NonRoot dirId) [])
-        Right (AddFile fileId) -> addFileMonadic fileId
-        Right (RmFile fileId)  -> rmFileMonadic fileId
-        Right (Cd dirId)       -> cdMonadic (NonRoot dirId)
-        Right CdUp             -> cdUpMonadic
         Right Pwd              -> pwdMonadic
         Right Ls               -> lsMonadic
+        Right (MkDir dirId)    -> mkDirMonadic (Directory (NonRoot dirId) [])
+        Right (Cd dirId)       -> cdMonadic (NonRoot dirId)
+        Right CdUp             -> cdUpMonadic
+        Right (AddFile fileId) -> addFileMonadic fileId
+        Right (RmFile fileId)  -> rmFileMonadic fileId
         Right (Find fileId)    -> findMonadic fileId
         Left errMsg            -> tell errMsg
 
@@ -118,7 +137,7 @@ parseCommand input =
                   | otherwise        -> Left $ numberArgsError cmd 1
         "cd"      | length args == 1 -> Right $ Cd (head args)
                   | otherwise        -> Left $ numberArgsError cmd 1
-        "cdup"    | length args == 0 -> Right CdUp
+        "cdUp"    | length args == 0 -> Right CdUp
                   | otherwise        -> Left $ numberArgsError cmd 0
         "pwd"     | length args == 0 -> Right Pwd
                   | otherwise        -> Left $ numberArgsError cmd 0
@@ -127,21 +146,3 @@ parseCommand input =
         "find"    | length args == 1 -> Right $ Find (head args)
                   | otherwise        -> Left $ numberArgsError cmd 1
         _                            -> Left "Wrong command."
-
-printFSUsageMenu :: InputT IO ()
-printFSUsageMenu = outputStrLn $ concat
-    [ "\nFILE SYSTEMS USAGE:\n"
-    , "pwd\t\tPrints the current directory of the file system.\n"
-    , "ls\t\tLists the content of the current directory (the \"(d)\" prefix "
-    , "indicates a directory).\n"
-    , "addFile f\tAdds file f to the current directory.\n"
-    , "mkDir d\tAdds directory d within the current directory.\n"
-    , "cd d\t\tEnters directory d located in the current directory.\n"
-    , "cdup\t\tChanges directory to the immediate parent of the current "
-    , "directory.\n"
-    , "find f\t\tPrints complete path of each occurrence of file f under the "
-    , "current directory.\n"
-    , "rmFile p\tRemoves file located at path p, starting from the current "
-    , "directory.\n"
-    , ":q\t\tReturn to the file systems manager.\n"
-    ]
