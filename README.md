@@ -3,15 +3,15 @@
 
 VSFS now manages multiple file systems. On the one hand, the file systems **manager** accepts the following commands:
 
-+ **list** prints the list of all the currently running file systems.
++ **list** Lists all the file systems.
 
-+ **init fsName** creates a new file systems called fileName.
++ **init fs** Initializes a file system called fs.
 
-+ **switch fsName** either switches to edition mode for file system fsName if it exists, or prints an error message otherwise.
++ **switch fs** Switches to file system manager for fs.
 
-+ **delete fsName** either completely removes the file system called fsName from the manager if it exists, or prints an error message otherwise.  
++ **delete fs** Deletes file system fs.  
 
-+ **:q** quites the application.
++ **:q** Quits.
 
 \
 \
@@ -21,25 +21,27 @@ On the other hand, after having **switch**ed to a specific file system, the prog
 
 + **ls** Lists the content of the current directory (the "(d)" prefix indicates directories).
 
-+ **addFile fileName** adds a file called fileName to the current directory. It prints an error message if the file already exists.
++ **mkDir d** Adds directory d within the current directory.
 
-+ **addDir directoryName** Adds a directory called directoryName to the current directory. It prints an error message if the directory already exists.
++ **cd d** Enters directory d located in the current directory.
 
-+ **cd directoryName** Enter the directory called directoryName. It prints an error message if the directory does not exist.
++ **cdup** Changes directory to the immediate parent of the current directory.
 
-+ **cdup** Changes directory to the immediate parent of the current directory. It prints an error message if the current directory is the root of the file system.
++ **addFile f** Adds file f to the current directory.
 
-+ **find fileName** Prints the complete path of each occurrence of the fileName under the current directory.
++ **rmFile f** Removes file located at path p, starting from the current directory.
 
-+ **rmFile fileName** Removes the file located at path fileName. It prints an error message if the file cannot be found.
++ **find f** Prints the complete path of each occurrence of f under the current directory.
 
 + **:q** switches back to the file systems manager. Note: the current directory is left unchanged. 
 
 \
 Extending the set of commands accepted by a file system with user-defined ones should be relatively easy. Adding a new command **cmd** goes as follows:
 
-i) Extend the **Command** data type with a new data constructor (taking as many data types as required in the implementation of **cmd**),
+i) Extend data type **Command**, in src/Types.hs, with a new data constructor, making sure to include as many data types as information required in the implementation of **cmd**,
 
-ii) Implement a **cmdMonadic** function whose rightmost type should be **Session ()**, and
+ii) Implement pure function **cmd**, which updates the state of the file system according to the intended logic of the command,
 
-iii) Extend the **parseCommand** and **runCommand** functions in Main.hs accordingly.
+iii) Implement a **cmdMonadic** function whose return type should be **Session ()**, and
+
+iv) Extend the **parseCommand** and **runCommand** functions in Main.hs accordingly.
