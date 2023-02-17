@@ -1,0 +1,34 @@
+Cabal-version:       2.4
+
+name:                VSFS
+version:             0.1.0.0
+license:             Apache-2.0
+license-file:        LICENSE
+author:              MaicoLeberle
+maintainer:          maico.leberle@gmail.com
+build-type:          Simple
+extra-source-files:  README.md
+
+library VSFSLib
+  exposed-modules:    Main
+                    , VSFS
+                    , Types
+  build-depends:      base >=4.12 && <4.13
+                    , data-default
+                    , mtl >=2.2 && <2.3
+                    , haskeline >=0.7 && <0.8
+                    , text
+                    , split
+                    , pretty-simple
+  hs-source-dirs:   src
+  default-language: Haskell2010
+
+executable VSFS
+  main-is:             Main.hs
+  -- other-modules:
+  -- other-extensions:
+  build-depends:         base >=4.12 && <4.13
+                       , mtl >=2.2 && <2.3
+                       , haskeline >=0.7 && <0.8
+  hs-source-dirs:      src
+  default-language:    Haskell2010
